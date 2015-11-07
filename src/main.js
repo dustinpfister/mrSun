@@ -38,33 +38,158 @@ var Lake = function(sRadian, rSize){
 		
 		water : {
 			
-			total : 1000,
+			total : 1000,   // the total amount of water that there is in the earth
+			perRadian: 200, // the max amount of water that can be in an area per radian of angular distance
 			
+			ground: 1000,  // the amount of water that is in the ground
+			air:0,         // the amount of water that is in the air
+			
+			areas: [],      // areas that are lakes, oceans, ect that also may store some of earths water. 
+		    seepRate : 3,
+		
+		    // set the total amount of water, and the areas where water may appear.
+		    setup : function(total, areaArray){
+				
+				var i,len, tempArea;
+				
+				// set total water
+				this.total = total;
+				
+				// all water starts in the ground
+				this.ground = this.total;
+				
+				// nothing in the air
+				this.air = 0;
+				
+				
+				// set up areas
+				this.areas = [];
+				i = 0; len = areaArray.length;
+				while(i < len){
+					
+					tempArea = {
+						
+						sRadian : areaArray[i].sRadian,
+						rSize : areaArray[i].rSize
+					
+					};
+				
+					tempArea.capacity = this.perRadian * tempArea.rSize;
+					tempArea.amount = 0;
+					tempArea.points = [];
+					
+					this.areas.push(tempArea);
+					
+					i++;
+				}
+				
+			},
+			
+			
+			update : function(earth){
+					
+					var i,len,area,deltaWater,rLen,radian,step,r,x,y;
+					
+					
+					
+					
+					
+                    i=0;len=this.areas.length					
+					while(i < len){
+							
+						area = this.areas[i];
+					
+                        // if there is water in the ground it can seep into the area					
+						if(this.ground > 0){
+					
+         					if(area.amount < area.capacity){
+							
+							
+							    if(area.capacity - area.amount < this.seepRate){
+									
+									deltaWater = area.capacity - area.amount;
+									
+								}else{
+									
+									deltaWater = this.seepRate;
+								}
+							
+                                this.ground -= deltaWater;
+								area.amount += deltaWater;
+								
+							}
+						}
+						
+						// the sun?
+						
+						// check distances
+						area.points = [];
+						rLen = 5, // number of points along surface to check distance to sun 
+						r=0,
+						radian = area.sRadian, 
+						step = area.rSize / rLen;
+						while(r < rLen+1){
+							
+							x = Math.cos(radian) * earth.radius + earth.cx;
+							y = Math.sin(radian) * earth.radius + earth.cy;
+							area.points.push({x:x,y:y});
+							
+							radian += step;
+							r++;
+						}
+						
+						// sun angle within area?
+						if(earth.sun.angle > area.sRadian && earth.sun.angle < area.sRadian + area.rSize){
+							
+							//	console.log(true);
+						}
+						
+		
+                		i++;
+					}
+						
+					
+					
+					
+					
+					
+					
+					
+				}
+		
 		},
 		
 		sun : {
 			
 			heat: 100,
 			x: 0, // set by angle and distance from center of earth
-			y: 0,
+			y: 0,			
 			radius: 30,
+			
 			angle:0,
-			fromCenter:0
+			fromCenter:0,
+			
+			surfaceX:0,
+			surfaceY:0
 			
 		},
 		
 		maxDistance:0,
-		waterPerRadian: 1000,
+		
 		towns : [],
-		lakes : [],
+		
 		
 		update : function(){
 			
-			var i,len, d, per, town, diff;
+			var i,len, d, per, town, diff,x,y;
 			
 			this.sun.x = Math.cos(this.sun.angle) * this.sun.fromCenter + this.cx;
 			this.sun.y = Math.sin(this.sun.angle) * this.sun.fromCenter + this.cy;
 			
+			this.sun.surfaceX = Math.cos(this.sun.angle) * this.radius + this.cx;
+			this.sun.surfaceY = Math.sin(this.sun.angle) * this.radius + this.cy;
+			
+			// update towns
 			i=0;len = this.towns.length;
 			while( i < len ){
 				
@@ -111,8 +236,6 @@ var Lake = function(sRadian, rSize){
 						
 					    }
 						
-						//console.log(town.HP);
-						console.log('per: ' + Number(town.HP / town.maxHP));
 						
 				    }
 				
@@ -128,6 +251,16 @@ var Lake = function(sRadian, rSize){
 				
 				i++;
 			}
+			
+			
+			// update water
+			this.water.update(this);
+			
+			
+			
+			// a point on the surface that is below the sun
+			
+			
 		},
 		
 		setup : function(){
@@ -137,6 +270,18 @@ var Lake = function(sRadian, rSize){
 			
 			this.sun.x = this.cx;
 			this.sun.y = this.cy;
+			
+			// water
+			this.water.setup(1000, [
+			    
+				{
+					sRadian:Math.PI * 0.5,
+					rSize: 1
+				}
+			
+			]);
+			
+			// towns
 			this.towns.push(new Town(this.cx,this.cy,this.radius));
 			
 		},
@@ -199,8 +344,6 @@ var Lake = function(sRadian, rSize){
 		
 	},
 	
-	
-	
 	// set size of container and canvas
 	setSize = function(){
 		
@@ -222,7 +365,6 @@ var Lake = function(sRadian, rSize){
 		container = document.getElementById('game_container');
 		canvas = document.createElement('canvas');
 		context = canvas.getContext('2d');
-		
 		
 		setSize();
 		
@@ -288,6 +430,13 @@ var Lake = function(sRadian, rSize){
 			ctx.stroke();
 			ctx.fill();
 			
+			// draw line from sun to surface
+			ctx.beginPath();
+			ctx.moveTo(earth.sun.x,earth.sun.y);
+			ctx.lineTo(earth.sun.surfaceX, earth.sun.surfaceY);
+			ctx.stroke();
+			
+			
 			// draw towns
 			i = 0, len = earth.towns.length;
 			while(i < len){
@@ -311,6 +460,44 @@ var Lake = function(sRadian, rSize){
 				ctx.arc(earth.towns[i].x, earth.towns[i].y, 15,Math.PI / 2, Math.PI/2 - (earth.towns[i].HP / earth.towns[i].maxHP) * (Math.PI/2),true  );
 			    ctx.stroke();
 				
+				i++;
+			}
+			
+			
+			// draw water areas
+			
+			var area,per;
+			
+			ctx.strokeStyle = '#0000ff';
+			i=0, len = earth.water.areas.length;
+			while( i < len ){
+				
+				area = earth.water.areas[i];
+				
+				per = area.amount / area.capacity;
+				
+				ctx.lineWidth = 1 + 10 * per;
+				ctx.beginPath();
+				//ctx.arc(earth.cx,earth.cy,earth.radian,earth.water.areas[i].sRadian,earth.water.areas[i].rSize );
+				
+				ctx.arc(earth.cx,earth.cy,earth.radius,area.sRadian,area.sRadian+area.rSize);
+				ctx.stroke();
+			
+                // draw water lines to sun
+				ctx.lineWidth = 1;
+				var p = 0, pLen = area.points.length;
+				
+				while(p < pLen){
+				
+                    ctx.beginPath();				
+					ctx.moveTo(area.points[p].x,area.points[p].y);
+					ctx.lineTo(earth.sun.x,earth.sun.y);
+					
+					ctx.stroke();
+					
+					p++;
+				}
+			
 				i++;
 			}
 			
