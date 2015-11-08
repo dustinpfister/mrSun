@@ -15,13 +15,14 @@ var Town = function(earthCX, earthCY, earthRadius){
 	
 };
 
+/*
 var Lake = function(sRadian, rSize){
 	
 	this.sRadian = sRadian;
 	this.rSize = rSize;
 	
 };
-
+*/
 
 (function(){
 	
@@ -39,18 +40,18 @@ var Lake = function(sRadian, rSize){
 		water : {
 			
 			total : 1000,   // the total amount of water that there is in the earth
-			perRadian: 200, // the max amount of water that can be in an area per radian of angular distance
+			perRadian: 500, // the max amount of water that can be in an area per radian of angular distance
 			
 			ground: 1000,  // the amount of water that is in the ground
 			air:0,         // the amount of water that is in the air
 			
 			areas: [],      // areas that are lakes, oceans, ect that also may store some of earths water. 
-		    seepRate : 3,
+		    seepRate : 2,
 		
 		    // set the total amount of water, and the areas where water may appear.
 		    setup : function(total, areaArray){
 				
-				var i,len, tempArea;
+				var i,len, tempArea,r,rLen,x,y,radian,step;
 				
 				// set total water
 				this.total = total;
@@ -78,6 +79,21 @@ var Lake = function(sRadian, rSize){
 					tempArea.amount = 0;
 					tempArea.points = [];
 					
+					tempArea.points = [];
+					rLen = 5, // number of points along surface to check distance to sun 
+					r=0,
+					radian = tempArea.sRadian, 
+					step = tempArea.rSize / rLen;
+					while(r < rLen+1){
+							
+						x = Math.cos(radian) * earth.radius + earth.cx;
+						y = Math.sin(radian) * earth.radius + earth.cy;
+						tempArea.points.push({x:x,y:y});
+							
+						radian += step;
+						r++;
+					}
+					
 					this.areas.push(tempArea);
 					
 					i++;
@@ -88,12 +104,10 @@ var Lake = function(sRadian, rSize){
 			
 			update : function(earth){
 					
-					var i,len,area,deltaWater,rLen,radian,step,r,x,y;
+					var i,len,area,deltaWater,p,pLen;
 					
 					
-					
-					
-					
+					// update areas
                     i=0;len=this.areas.length					
 					while(i < len){
 							
@@ -102,16 +116,26 @@ var Lake = function(sRadian, rSize){
                         // if there is water in the ground it can seep into the area					
 						if(this.ground > 0){
 					
+					        // if the area is not filled to capacity, then water can seep in from the ground
          					if(area.amount < area.capacity){
 							
 							
-							    if(area.capacity - area.amount < this.seepRate){
+							    //if(area.capacity - area.amount < this.seepRate){
+								if(this.ground < this.seepRate){
 									
-									deltaWater = area.capacity - area.amount;
+									deltaWater = this.ground;
+									//deltaWater = area.capacity - area.amount;
 									
 								}else{
 									
 									deltaWater = this.seepRate;
+								}
+								
+								// do not fill area over capacity
+								if(area.amount + deltaWater > area.capacity){
+									
+									deltaWater = area.capacity - area.amount;
+									
 								}
 							
                                 this.ground -= deltaWater;
@@ -120,38 +144,57 @@ var Lake = function(sRadian, rSize){
 							}
 						}
 						
-						// the sun?
+						// the sun
 						
-						// check distances
-						area.points = [];
-						rLen = 5, // number of points along surface to check distance to sun 
-						r=0,
-						radian = area.sRadian, 
-						step = area.rSize / rLen;
-						while(r < rLen+1){
+						// find the distance for each point in area, so we know which parts will be hotter than others
+						
+		                p = 0; pLen = area.points.length;
+						while(p < pLen){
 							
-							x = Math.cos(radian) * earth.radius + earth.cx;
-							y = Math.sin(radian) * earth.radius + earth.cy;
-							area.points.push({x:x,y:y});
+							area.points[p].d = api.distance(area.points[p].x,area.points[p].y,earth.sun.x,earth.sun.y)-30;
 							
-							radian += step;
-							r++;
+							area.points[p].heat = Math.floor(earth.sun.heat - area.points[p].d / 620 * earth.sun.heat);
+							
+							if(area.points[p].heat > 75){
+								
+								// ALERT! you need to not allow for negative amounts!
+								if(area.amount > 0){
+								    
+									//area.amount -=  1;
+									//this.air +=  1;
+								
+								    deltaWater = area.points[p].heat - 75;
+								
+								    if(area.amount - deltaWater < 0){
+										
+										deltaWater = area.amount;
+									}
+								
+								    area.amount -= deltaWater;
+									this.air += deltaWater;
+								
+								}
+							}
+							
+							p++;
 						}
-						
-						// sun angle within area?
-						if(earth.sun.angle > area.sRadian && earth.sun.angle < area.sRadian + area.rSize){
-							
-							//	console.log(true);
-						}
-						
+		
 		
                 		i++;
 					}
 						
 					
 					
+					// AIR Water
 					
 					
+					// if there is water in the air it may rain.
+					if(this.air > 0){
+						
+						this.air--;
+						this.ground++;
+						
+					}
 					
 					
 					
@@ -174,6 +217,7 @@ var Lake = function(sRadian, rSize){
 			
 		},
 		
+		// ALERT! I might not need this
 		maxDistance:0,
 		
 		towns : [],
@@ -272,11 +316,20 @@ var Lake = function(sRadian, rSize){
 			this.sun.y = this.cy;
 			
 			// water
-			this.water.setup(1000, [
+			this.water.setup(10000, [
 			    
 				{
 					sRadian:Math.PI * 0.5,
-					rSize: 1
+					rSize: 2.5
+				},
+				
+				{
+					sRadian:Math.PI * 1.5,
+					rSize: 0.5
+				},
+				{
+					sRadian:0,
+					rSize: 0.25
 				}
 			
 			]);
@@ -487,21 +540,39 @@ var Lake = function(sRadian, rSize){
 				ctx.lineWidth = 1;
 				var p = 0, pLen = area.points.length;
 				
+				var per,d,heat;
+				
 				while(p < pLen){
 				
+				    if(area.points[p].heat > 75){
                     ctx.beginPath();				
 					ctx.moveTo(area.points[p].x,area.points[p].y);
 					ctx.lineTo(earth.sun.x,earth.sun.y);
 					
 					ctx.stroke();
+					}
+					
+					// heat
+					//ctx.fillText(area.points[p].heat,20,20 + 20 * p);
+					
+					
 					
 					p++;
 				}
+				
+				// amount
+			    ctx.fillText('area amount: '+area.amount,20,300 + 20 * i);
+					
+				
 			
 				i++;
 			}
 			
-			
+			// 
+			ctx.fillText('total water: '+earth.water.total,20,20);
+			ctx.fillText('ground water: '+earth.water.ground,20,40);
+			ctx.fillText('air water: '+earth.water.air,20,60);
+				
 		}
 		
 	},
