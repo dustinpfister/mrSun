@@ -41,6 +41,8 @@ var Town = function (earthCX, earthCY, earthRadius) {
 			air : 0, // the amount of water that is in the air
 
 			areas : [], // areas that are lakes, oceans, ect that also may store some of earths water.
+			drops : [], // water drops that are going up to or down from air reserves.
+
 			seepRate : 2,
 
 			// set the total amount of water, and the areas where water may appear.
@@ -98,12 +100,75 @@ var Town = function (earthCX, earthCY, earthRadius) {
 						});
 
 						radian += step;
-						r+=1;
+						r += 1;
 					}
 
 					this.areas.push(tempArea);
 
-					i+=1;
+					i += 1;
+				}
+
+			},
+
+			addDrops : function () {},
+
+			evaporation : function (earth, area, point) {
+
+				var maxWater = 100,
+				waterPerUnit,
+				unitCount,
+				per,
+				deltaWater,
+				remaining,
+				drop,d;
+
+				if (area.amount > 0) {
+
+					deltaWater = Math.ceil((area.points[point].heat - 50 + 1) / 51 * maxWater);
+
+					if (area.amount - deltaWater < 0) {
+
+						deltaWater = area.amount;
+					}
+
+					per = deltaWater / maxWater;
+
+					unitCount = Math.ceil(per * 10);
+					remaining = deltaWater % unitCount;
+					waterPerUnit = Math.floor(deltaWater / unitCount);
+
+					d=0;
+					while(d < unitCount){
+						
+						var step = area.rSize / 5;
+						
+						drop = {
+							
+							angle: area.sRadian + step * point + (Math.random() * step),
+							distance: earth.radius,
+							
+							x:area.points[point].x,
+							y:area.points[point].y,
+							water : waterPerUnit,
+							kill: false
+						};
+						
+						
+						
+						// if last append remaining
+						if(d === unitCount - 1){
+							
+							drop.water += remaining;
+							
+						}
+						
+						this.drops.push(drop);
+						
+						d++;
+					}
+					
+					area.amount -= deltaWater;
+					//this.air += deltaWater;
 				}
 
 			},
@@ -114,6 +179,10 @@ var Town = function (earthCX, earthCY, earthRadius) {
 				len,
 				area,
 				deltaWater,
+
+				//waterPerUnit,
+				//unitCount,
+
 				p,
 				pLen;
 
@@ -122,86 +191,108 @@ var Town = function (earthCX, earthCY, earthRadius) {
 				len = this.areas.length;
 				while (i < len) {
 
-						area = this.areas[i];
+					area = this.areas[i];
 
-						// if there is water in the ground it can seep into the area
-						if (this.ground > 0) {
+					// if there is water in the ground it can seep into the area
+					if (this.ground > 0) {
 
-							// if the area is not filled to capacity, then water can seep in from the ground
-							if (area.amount < area.capacity) {
+						// if the area is not filled to capacity, then water can seep in from the ground
+						if (area.amount < area.capacity) {
 
-								//if(area.capacity - area.amount < this.seepRate){
-								if (this.ground < this.seepRate) {
+							//if(area.capacity - area.amount < this.seepRate){
+							if (this.ground < this.seepRate) {
 
-									deltaWater = this.ground;
-									//deltaWater = area.capacity - area.amount;
+								deltaWater = this.ground;
+								//deltaWater = area.capacity - area.amount;
 
-								} else {
+							} else {
 
-									deltaWater = this.seepRate;
-								}
-
-								// do not fill area over capacity
-								if (area.amount + deltaWater > area.capacity) {
-
-									deltaWater = area.capacity - area.amount;
-
-								}
-
-								this.ground -= deltaWater;
-								area.amount += deltaWater;
-
+								deltaWater = this.seepRate;
 							}
-						}
 
-						// the sun
+							// do not fill area over capacity
+							if (area.amount + deltaWater > area.capacity) {
 
-						// find the distance for each point in area, so we know which parts will be hotter than others
-
-						p = 0;
-						pLen = area.points.length;
-						while (p < pLen) {
-
-							// set heat of section based on distance to sun
-							area.points[p].d = api.distance(area.points[p].x, area.points[p].y, earth.sun.x, earth.sun.y) - 30;
-							area.points[p].heat = Math.round(earth.sun.heat - area.points[p].d / 620 * earth.sun.heat);
-
-							if (new Date() - area.points[p].lastUpdate >= 1000) {
-
-								if (area.points[p].heat - 50 >= 0) {
-
-									deltaWater = Math.ceil((area.points[p].heat - 50 + 1) / 51 * 100);
-
-									if (area.amount - deltaWater < 0) {
-
-										deltaWater = area.amount;
-									}
-
-									area.amount -= deltaWater;
-									this.air += deltaWater;
-
-									console.log(deltaWater);
-
-								}
-								area.points[p].lastUpdate = new Date();
+								deltaWater = area.capacity - area.amount;
 
 							}
 
-							p+=1;
+							this.ground -= deltaWater;
+							area.amount += deltaWater;
+
+						}
+					}
+
+					// the sun
+
+					// find the distance for each point in area, so we know which parts will be hotter than others
+					p = 0;
+					pLen = area.points.length;
+					while (p < pLen) {
+
+						// set heat of section based on distance to sun
+						area.points[p].d = api.distance(area.points[p].x, area.points[p].y, earth.sun.x, earth.sun.y) - 30;
+						area.points[p].heat = Math.round(earth.sun.heat - area.points[p].d / 620 * earth.sun.heat);
+
+						if (new Date() - area.points[p].lastUpdate >= 1000) {
+
+							if (area.points[p].heat - 50 >= 0) {
+
+								this.evaporation(earth,area, p);
+
+							}
+							area.points[p].lastUpdate = new Date();
+
 						}
 
-						i+=1;
+						p += 1;
 					}
 
-					// AIR Water
+					i += 1;
+				}
 
-					// if there is water in the air it may rain.
-					if (this.air > 0) {
-
-						this.air -= 1;
-						this.ground += 1;
-
+				// drops
+				i = 0;
+				len = this.drops.length,
+				killList = [];
+				while(i < len){
+					
+					this.drops[i].x = Math.cos(this.drops[i].angle) * this.drops[i].distance + earth.cx;
+					this.drops[i].y = Math.sin(this.drops[i].angle) * this.drops[i].distance + earth.cy;
+					
+					if(this.drops[i].distance > earth.radius / 2){
+					    
+						this.drops[i].distance--;
+					
+					}else{
+						
+						// this.kill = true;
+						
+						killList.push(i);
+						
 					}
+					
+					i++;
+				}
+				
+				i = killList.length;
+				while(i--){
+					
+					this.air += this.drops[killList[i]].water;
+					
+					this.drops.splice(killList[i],1);
+					
+				}
+				
+				
+				// AIR Water
+				// if there is water in the air it may rain.
+				if (this.air > 0) {
+
+					this.air -= 1;
+					this.ground += 1;
+
+				}
 
 			}
 
@@ -265,7 +356,7 @@ var Town = function (earthCX, earthCY, earthRadius) {
 
 					if (town.HP < town.maxHP) {
 
-						town.HP+=1;
+						town.HP += 1;
 
 						if (town.HP > town.maxHP) {
 
@@ -300,7 +391,7 @@ var Town = function (earthCX, earthCY, earthRadius) {
 
 				}
 
-				i+=1;
+				i += 1;
 			}
 
 			// update water
@@ -320,8 +411,7 @@ var Town = function (earthCX, earthCY, earthRadius) {
 			this.sun.y = this.cy;
 
 			// water
-			this.water.setup(2000, [
-					{
+			this.water.setup(2000, [{
 						sRadian : Math.PI * 0.5,
 						rSize : 3
 					}
@@ -479,7 +569,7 @@ var Town = function (earthCX, earthCY, earthRadius) {
 				ctx.arc(earth.towns[i].x, earth.towns[i].y, 15, Math.PI / 2, Math.PI / 2 - (earth.towns[i].HP / earth.towns[i].maxHP) * (Math.PI / 2), true);
 				ctx.stroke();
 
-				i+=1;
+				i += 1;
 			}
 
 			// draw water areas
@@ -493,7 +583,6 @@ var Town = function (earthCX, earthCY, earthRadius) {
 				area = earth.water.areas[i];
 
 				per = area.amount / area.capacity;
-
 
 				// draw water lines to sun
 				p = 0;
@@ -516,13 +605,29 @@ var Town = function (earthCX, earthCY, earthRadius) {
 						ctx.stroke();
 					}
 
-					p+=1;
+					p += 1;
 				}
+				
+				// draw drops
+				
+				ctx.lineWidth = 1;
+				ctx.strokeStyle='#0000ff';
+				p = 0, pLen = earth.water.drops.length;
+				while(p < pLen){
+					
+					ctx.beginPath();
+					ctx.arc(earth.water.drops[p].x, earth.water.drops[p].y, 5, 0, Math.PI*2);
+					ctx.stroke();
+					
+					
+					p++;
+				}
+				
 
 				// amount
 				ctx.fillText('area amount: ' + area.amount, 20, 300 + 20 * i);
 
-				i+=1;
+				i += 1;
 			}
 
 			//
@@ -542,7 +647,7 @@ var Town = function (earthCX, earthCY, earthRadius) {
 		draw[currentState](context);
 
 	},
-	
+
 	start = function () {
 
 		container = document.getElementById('game_container');
