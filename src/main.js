@@ -1,19 +1,53 @@
 
+var Town = function (earth, water) {
 
-var Town = function (earthCX, earthCY, earthRadius) {
-
+	var i=0, len = water.areas.length,
+	landZones = [], 
+	zoneIndex,
+	zone,
+	start = 0;
+	
+	// ALERT! towns can end up being placed at radian position 0 or Math.PI*2 when a water area is placed there.
+	while(i < len){
+		
+		landZones.push({
+			
+			start : start,
+			end : water.areas[i].sRadian
+			
+		});
+		
+		start = water.areas[i].sRadian + water.areas[i].rSize;
+		
+		i++;
+	}
+	
+	landZones.push({
+			
+		start : start,
+		end : Math.PI*2
+			
+	});
+	
+	zoneIndex = Math.floor(Math.random() * landZones.length);
+	zone = landZones[zoneIndex];
+	
 	this.heat = 50;
 	this.maxHeat = 75;
 	this.minHeat = 25;
 
-	this.angle = Math.random() * (Math.PI * 2);
+	//this.angle = Math.random() * (Math.PI * 2);
+	this.angle = Math.random() * (zone.end - zone.start) + zone.start;
+	
 	this.maxHP = 1000;
 	this.HP = this.maxHP;
 	this.radius = 15;
-	this.x = Math.cos(this.angle) * (earthRadius - this.radius) + earthCX;
-	this.y = Math.sin(this.angle) * (earthRadius - this.radius) + earthCY;
+	this.x = Math.cos(this.angle) * (earth.radius - this.radius) + earth.cx;
+	this.y = Math.sin(this.angle) * (earth.radius - this.radius) + earth.cy;
 
 };
+
+
 
 (function () {
 
@@ -89,14 +123,17 @@ var Town = function (earthCX, earthCY, earthRadius) {
 					r = 0;
 					radian = tempArea.sRadian;
 					step = tempArea.rSize / rLen;
-					while (r < rLen + 1) {
+					//while (r < rLen + 1) { // why plus one?
+					while (r < rLen) {
 
 						x = Math.cos(radian) * earth.radius + earth.cx;
 						y = Math.sin(radian) * earth.radius + earth.cy;
+						
 						tempArea.points.push({
 							x : x,
 							y : y,
-							lastUpdate : new Date()
+							lastUpdate : new Date(),
+							updateRate : Math.random() * 2000 + 3000
 						});
 
 						radian += step;
@@ -109,8 +146,6 @@ var Town = function (earthCX, earthCY, earthRadius) {
 				}
 
 			},
-
-			addDrops : function () {},
 
 			evaporation : function (earth, area, point) {
 
@@ -146,13 +181,12 @@ var Town = function (earthCX, earthCY, earthRadius) {
 							
 							angle: area.sRadian + step * point + (Math.random() * step),
 							distance: earth.radius,
-							
+							deltaDistance: (Math.random() * (area.points[point].heat / 100 * 5) + 1) * -1,
 							x:area.points[point].x,
 							y:area.points[point].y,
 							water : waterPerUnit,
-							kill: false
+							//kill: false
 						};
-						
 						
 						
 						// if last append remaining
@@ -168,7 +202,7 @@ var Town = function (earthCX, earthCY, earthRadius) {
 					}
 					
 					area.amount -= deltaWater;
-					//this.air += deltaWater;
+					
 				}
 
 			},
@@ -179,16 +213,13 @@ var Town = function (earthCX, earthCY, earthRadius) {
 				len,
 				area,
 				deltaWater,
-
-				//waterPerUnit,
-				//unitCount,
-
 				p,
 				pLen;
 
 				// update areas
 				i = 0;
 				len = this.areas.length;
+				
 				while (i < len) {
 
 					area = this.areas[i];
@@ -234,15 +265,17 @@ var Town = function (earthCX, earthCY, earthRadius) {
 						area.points[p].d = api.distance(area.points[p].x, area.points[p].y, earth.sun.x, earth.sun.y) - 30;
 						area.points[p].heat = Math.round(earth.sun.heat - area.points[p].d / 620 * earth.sun.heat);
 
-						if (new Date() - area.points[p].lastUpdate >= 1000) {
+						if (new Date() - area.points[p].lastUpdate >= area.points[p].updateRate) {
 
 							if (area.points[p].heat - 50 >= 0) {
 
 								this.evaporation(earth,area, p);
 
 							}
+							
 							area.points[p].lastUpdate = new Date();
 
+							area.points[p].updateRate = Math.random() * (4500 - 4500 * (area.points[p].heat / 100)) + 500;
 						}
 
 						p += 1;
@@ -262,7 +295,8 @@ var Town = function (earthCX, earthCY, earthRadius) {
 					
 					if(this.drops[i].distance > earth.radius / 2){
 					    
-						this.drops[i].distance--;
+						//this.drops[i].distance--;
+						this.drops[i].distance += this.drops[i].deltaDistance;
 					
 					}else{
 						
@@ -411,14 +445,26 @@ var Town = function (earthCX, earthCY, earthRadius) {
 			this.sun.y = this.cy;
 
 			// water
-			this.water.setup(2000, [{
-						sRadian : Math.PI * 0.5,
-						rSize : 3
+			this.water.setup(2000,     
+				[
+				    {
+						sRadian : Math.PI * 0.4,
+						rSize : 0.2
+					},
+				    {
+						sRadian : Math.PI * 0.8,
+						rSize : 1.5
+					},
+					{
+						sRadian : Math.PI * 1.5,
+						rSize : 1
 					}
-				]);
+				]
+			);
 
 			// towns
-			this.towns.push(new Town(this.cx, this.cy, this.radius));
+			//this.towns.push(new Town(this.cx, this.cy, this.radius));
+			this.towns.push(new Town(this, this.water));
 
 		},
 
@@ -616,7 +662,7 @@ var Town = function (earthCX, earthCY, earthRadius) {
 				while(p < pLen){
 					
 					ctx.beginPath();
-					ctx.arc(earth.water.drops[p].x, earth.water.drops[p].y, 5, 0, Math.PI*2);
+					ctx.arc(earth.water.drops[p].x, earth.water.drops[p].y, earth.water.drops[p].water , 0, Math.PI*2);
 					ctx.stroke();
 					
 					
